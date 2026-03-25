@@ -74,11 +74,12 @@ app.post('/webhook', async (req, res) => {
 
       const value = change.value;
 
-      // TEMP DEBUG — log everything
-      console.log('[DEBUG] change value:', JSON.stringify(value, null, 2));
+      // Only new posts — ignore edits, deletes, comments, likes, etc.
+      if (value.verb !== 'add') continue;
 
-      // Only new posts — ignore comments, likes, edits, deletes
-      if (value.item !== 'post' || value.verb !== 'add') continue;
+      // Accept all post item types Facebook may send
+      const POST_ITEMS = new Set(['post', 'status', 'photo', 'video', 'share']);
+      if (!POST_ITEMS.has(value.item)) continue;
 
       // The post_id prefix always matches the page that owns it.
       // This filters out fan/visitor wall posts on either page.
