@@ -16,18 +16,18 @@
  * wait a short delay, giving IML's webhook time to register first.
  */
 
-require("dotenv").config();
+require('dotenv').config();
 
-const express = require("express");
-const { fetchPost } = require("./facebook");
-const { sendPost } = require("./telegram");
-const { checkDuplicate, markPosted } = require("./store");
+const express = require('express');
+const { fetchPost } = require('./facebook');
+const { sendPost } = require('./telegram');
+const { checkDuplicate, markPosted } = require('./store');
 
 const app = express();
 app.use(express.json());
 
 const VERIFY_TOKEN = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN;
-const IML_PAGE_ID  = process.env.FACEBOOK_IML_PAGE_ID;
+const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
 const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
 const PORT = process.env.PORT || 3000;
 
@@ -36,29 +36,29 @@ const PORT = process.env.PORT || 3000;
 const IMBB_DELAY_MS = 8000;
 
 // ── Health check ─────────────────────────────────────────────────────────────
-app.get("/health", (_req, res) => res.json({ status: "ok" }));
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Facebook webhook verification ────────────────────────────────────────────
-app.get("/webhook", (req, res) => {
-  const mode      = req.query["hub.mode"];
-  const token     = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
 
-  if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("[Webhook] Facebook verification successful");
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    console.log('[Webhook] Facebook verification successful');
     return res.status(200).send(challenge);
   }
-  console.warn("[Webhook] Verification failed — token mismatch");
+  console.warn('[Webhook] Verification failed — token mismatch');
   return res.sendStatus(403);
 });
 
 // ── Incoming Facebook events ──────────────────────────────────────────────────
-app.post("/webhook", async (req, res) => {
+app.post('/webhook', async (req, res) => {
   // Always respond 200 quickly so Facebook doesn't retry
   res.sendStatus(200);
 
   const body = req.body;
-  if (body.object !== "page") return;
+  if (body.object !== 'page') return;
 
   for (const entry of body.entry || []) {
     const pageId = entry.id;
@@ -66,16 +66,19 @@ app.post("/webhook", async (req, res) => {
     // Only handle events from our two known pages
     if (pageId !== IML_PAGE_ID && pageId !== IMBB_PAGE_ID) continue;
 
-    const isIML  = pageId === IML_PAGE_ID;
+    const isIML = pageId === IML_PAGE_ID;
     const isIMBB = pageId === IMBB_PAGE_ID;
 
     for (const change of entry.changes || []) {
-      if (change.field !== "feed") continue;
+      if (change.field !== 'feed') continue;
 
       const value = change.value;
 
+      // TEMP DEBUG — log everything
+      console.log('[DEBUG] change value:', JSON.stringify(value, null, 2));
+
       // Only new posts — ignore comments, likes, edits, deletes
-      if (value.item !== "post" || value.verb !== "add") continue;
+      if (value.item !== 'post' || value.verb !== 'add') continue;
 
       // The post_id prefix always matches the page that owns it.
       // This filters out fan/visitor wall posts on either page.
@@ -84,10 +87,10 @@ app.post("/webhook", async (req, res) => {
 
       if (isIML) {
         // IML: process immediately (preferred source of truth)
-        await processPost(postId, "IML");
+        await processPost(postId, 'IML');
       } else if (isIMBB) {
         // IMBB: delay slightly so IML wins the dedup race on simultaneous posts
-        setTimeout(() => processPost(postId, "IMBB"), IMBB_DELAY_MS);
+        setTimeout(() => processPost(postId, 'IMBB'), IMBB_DELAY_MS);
       }
     }
   }
@@ -103,7 +106,9 @@ async function processPost(postId, pageLabel) {
     const { isDuplicate, reason } = checkDuplicate(postId, post);
 
     if (isDuplicate) {
-      console.log(`[${pageLabel}] Skipping duplicate post ${postId} — ${reason}`);
+      console.log(
+        `[${pageLabel}] Skipping duplicate post ${postId} — ${reason}`,
+      );
       return;
     }
 
@@ -111,7 +116,10 @@ async function processPost(postId, pageLabel) {
     markPosted(postId, post);
     console.log(`[${pageLabel}] ✓ Successfully forwarded post ${postId}`);
   } catch (err) {
-    console.error(`[${pageLabel}] ✗ Failed to forward post ${postId}:`, err.message);
+    console.error(
+      `[${pageLabel}] ✗ Failed to forward post ${postId}:`,
+      err.message,
+    );
   }
 }
 
@@ -120,10 +128,9 @@ app.listen(PORT, () => {
   console.log(`
 ╔══════════════════════════════════════════╗
 ║   FB → Telegram Bot is running!          ║
-║   IML Page  : ${String(IML_PAGE_ID  || "NOT SET").padEnd(26)}║
-║   IMBB Page : ${String(IMBB_PAGE_ID || "NOT SET").padEnd(26)}║
+║   IML Page  : ${String(IML_PAGE_ID || 'NOT SET').padEnd(26)}║
+║   IMBB Page : ${String(IMBB_PAGE_ID || 'NOT SET').padEnd(26)}║
 ║   Port      : ${String(PORT).padEnd(26)}║
 ╚══════════════════════════════════════════╝
   `);
 });
-
