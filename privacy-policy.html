@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Privacy Policy — IML & IMBB Telegram Bot</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0e0e0f;
+      --surface: #161618;
+      --border: #2a2a2e;
+      --accent: #c8a96e;
+      --accent-dim: rgba(200, 169, 110, 0.12);
+      --text: #e8e6e1;
+      --muted: #8a8680;
+      --max: 720px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      line-height: 1.75;
+      min-height: 100vh;
+      padding: 0 1.5rem;
+    }
+
+    /* Subtle grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 5rem 0 6rem;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2.5rem;
+      margin-bottom: 3rem;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    .eyebrow {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 400;
+      line-height: 1.15;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+
+    .meta {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    /* Sections */
+    section {
+      margin-bottom: 2.5rem;
+      padding: 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    section:nth-child(2) { animation-delay: 0.05s; }
+    section:nth-child(3) { animation-delay: 0.10s; }
+    section:nth-child(4) { animation-delay: 0.15s; }
+    section:nth-child(5) { animation-delay: 0.20s; }
+    section:nth-child(6) { animation-delay: 0.25s; }
+    section:nth-child(7) { animation-delay: 0.30s; }
+
+    h2 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 1.2rem;
+      font-weight: 400;
+      color: var(--accent);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    h2::before {
+      content: '';
+      display: inline-block;
+      width: 18px;
+      height: 1px;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    p { margin-bottom: 0.75rem; color: var(--text); font-size: 0.95rem; }
+    p:last-child { margin-bottom: 0; }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin: 0.5rem 0 0.75rem;
+    }
+
+    ul li {
+      font-size: 0.95rem;
+      color: var(--text);
+      padding: 0.35rem 0 0.35rem 1.4rem;
+      position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+
+    ul li:last-child { border-bottom: none; }
+
+    ul li::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-size: 0.8rem;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(200, 169, 110, 0.3);
+      transition: border-color 0.2s;
+    }
+
+    a:hover { border-color: var(--accent); }
+
+    /* Contact box */
+    .contact-box {
+      background: var(--accent-dim);
+      border: 1px solid rgba(200, 169, 110, 0.25);
+      border-radius: 2px;
+      padding: 1.25rem 1.5rem;
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .contact-box strong {
+      display: block;
+      color: var(--accent);
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 4rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-align: center;
+      animation: fadeUp 0.6s 0.4s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 600px) {
+      section { padding: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header>
+      <p class="eyebrow">Legal Document</p>
+      <h1>Privacy Policy</h1>
+      <p class="meta">International Mr. Leather &amp; International Mr. Bear &amp; Bootblack — Telegram Sync Bot<br>
+      Effective date: <span id="date"></span></p>
+    </header>
+
+    <section>
+      <h2>Overview</h2>
+      <p>This Privacy Policy describes how the IML &amp; IMBB Telegram Sync Bot ("the Bot") collects, uses, and handles information when syncing public posts from the International Mr. Leather (IML) and International Mr. Bear &amp; Bootblack (IMBB) Facebook Pages to a Telegram channel.</p>
+      <p>The Bot is operated by IML/IMBB page administrators for the sole purpose of distributing public announcements and content to our Telegram community.</p>
+    </section>
+
+    <section>
+      <h2>Information We Access</h2>
+      <p>The Bot accesses the following data from Facebook via the Graph API:</p>
+      <ul>
+        <li>Publicly published post text from the IML and IMBB Facebook Pages</li>
+        <li>Photos and videos attached to those public posts</li>
+        <li>Link previews and article shares posted by the pages</li>
+        <li>Post metadata such as timestamp and post ID</li>
+      </ul>
+      <p>The Bot only accesses content that is already publicly visible on our Facebook Pages. It does not access private messages, personal user data, follower information, or any data from individuals who interact with the pages.</p>
+    </section>
+
+    <section>
+      <h2>How We Use This Information</h2>
+      <p>Accessed content is used exclusively to:</p>
+      <ul>
+        <li>Reproduce public page posts in our Telegram channel</li>
+        <li>Deduplicate content to avoid sending the same post twice</li>
+        <li>Preserve post formatting, images, and media in Telegram</li>
+      </ul>
+      <p>We do not sell, share, analyze, or use this data for any purpose other than the above.</p>
+    </section>
+
+    <section>
+      <h2>Data Storage</h2>
+      <p>The Bot stores a minimal log of previously forwarded post IDs and content hashes locally on our server. This is used solely to prevent duplicate posts and contains no personal information. This data is not shared with any third party and is periodically pruned automatically.</p>
+      <p>No Facebook user data, personal information, or private content is stored at any time.</p>
+    </section>
+
+    <section>
+      <h2>Third-Party Services</h2>
+      <p>The Bot interacts with the following third-party platforms:</p>
+      <ul>
+        <li><strong>Facebook Graph API</strong> — to retrieve public page post content</li>
+        <li><strong>Telegram Bot API</strong> — to publish content to our Telegram channel</li>
+        <li><strong>Railway</strong> — cloud hosting platform where the Bot runs</li>
+      </ul>
+      <p>Each of these services has its own privacy policy governing how they handle data.</p>
+    </section>
+
+    <section>
+      <h2>Data Retention &amp; Deletion</h2>
+      <p>The Bot does not retain any personal data. The only stored data is a list of post IDs and anonymized content hashes used for deduplication, which is automatically pruned to the most recent 500 entries.</p>
+      <p>If you have concerns about any data, please contact us using the information below and we will respond within 30 days.</p>
+    </section>
+
+    <section>
+      <h2>Contact</h2>
+      <p>For any questions or concerns regarding this Privacy Policy, please contact the IML page administrators:</p>
+      <div class="contact-box">
+        <strong>International Mr. Leather</strong>
+        <a href="https://www.facebook.com/internationalmrleather" target="_blank">facebook.com/internationalmrleather</a>
+      </div>
+    </section>
+
+    <footer>
+      <p>This policy may be updated periodically. Continued use of our Telegram channel constitutes acceptance of any changes.</p>
+      <p style="margin-top:0.5rem;">© <span id="year"></span> International Mr. Leather. All rights reserved.</p>
+    </footer>
+
+  </div>
+
+  <script>
+    const now = new Date();
+    document.getElementById('date').textContent = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('year').textContent = now.getFullYear();
+  </script>
+</body>
+</html>
