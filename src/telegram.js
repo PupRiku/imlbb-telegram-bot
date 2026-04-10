@@ -137,6 +137,11 @@ async function sendVideo(post) {
       const head = await axios.head(post.video.url).catch(() => null);
       const size = parseInt(head?.headers?.['content-length'] || '0', 10);
 
+      // TEMP DEBUG
+      console.log('[Video] URL:', post.video.url ? 'present' : 'missing');
+      console.log('[Video] Content-Length:', size);
+      console.log('[Video] Status:', head?.status);
+
       if (size > 0 && size <= MAX_VIDEO_BYTES) {
         await bot.api.sendVideo(CHANNEL, post.video.url, {
           caption: escapeHTML(caption),
