@@ -64,6 +64,15 @@ function normalizePost(raw) {
     post.sourceUrl = attachment.url;
   }
 
+  // For shares, the original post's text lives in attachment.description.
+  // Combine IML's share caption (post.text) with the original text, avoiding duplication.
+  const attachmentDescription = attachment.description || '';
+  if (attachmentDescription && attachmentDescription !== post.text) {
+    post.text = post.text
+      ? `${post.text}\n\n${attachmentDescription}`
+      : attachmentDescription;
+  }
+
   const mediaType = attachment.media_type || attachment.type;
 
   if (mediaType === 'album' || attachment.subattachments?.data?.length > 1) {
