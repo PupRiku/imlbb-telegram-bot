@@ -24,9 +24,18 @@ async function fetchPost(postId) {
     'created_time',
   ].join(',');
 
-  const { data } = await axios.get(`${BASE}/${postId}`, {
-    params: { fields, access_token: TOKEN },
-  });
+  const { data } = await axios
+    .get(`${BASE}/${postId}`, {
+      params: { fields, access_token: TOKEN },
+    })
+    .catch((err) => {
+      console.error(
+        '[Facebook] API error:',
+        err.response?.status,
+        JSON.stringify(err.response?.data),
+      );
+      throw err;
+    });
 
   return normalizePost(data);
 }
