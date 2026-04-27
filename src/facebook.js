@@ -9,12 +9,29 @@ const axios = require('axios');
 const BASE = 'https://graph.facebook.com/v19.0';
 const TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
 
+function assertValidPostId(postId) {
+  if (typeof postId !== 'string') {
+    throw new Error('Invalid Facebook post ID');
+  }
+
+  const trimmed = postId.trim();
+  const isNumeric = /^\d+$/.test(trimmed);
+  const isCompositeNumeric = /^\d+_\d+$/.test(trimmed);
+
+  if (!isNumeric && !isCompositeNumeric) {
+    throw new Error('Invalid Facebook post ID');
+  }
+
+  return trimmed;
+}
+
 /**
  * Fetch a single post's full details including attachments.
  * @param {string} postId  – Facebook post ID (e.g. "123456789_987654321")
  * @returns {Promise<object>} Normalized post object
  */
 async function fetchPost(postId) {
+  const safePostId = assertValidPostId(postId);
   const fields = [
     'id',
     'message',
@@ -25,7 +42,7 @@ async function fetchPost(postId) {
   ].join(',');
 
   const { data } = await axios
-    .get(`${BASE}/${postId}`, {
+    .get(`${BASE}/${safePostId}`, {
       params: { fields, access_token: TOKEN },
     })
     .catch((err) => {
