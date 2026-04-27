@@ -8,6 +8,12 @@ const axios = require('axios');
 
 const BASE = 'https://graph.facebook.com/v19.0';
 const TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
+const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
+
+function isNumericId(value) {
+  return typeof value === 'string' && /^\d+$/.test(value.trim());
+}
 
 function assertValidPostId(postId) {
   if (typeof postId !== 'string') {
@@ -19,6 +25,24 @@ function assertValidPostId(postId) {
   const isCompositeNumeric = /^\d+_\d+$/.test(trimmed);
 
   if (!isNumeric && !isCompositeNumeric) {
+    throw new Error('Invalid Facebook post ID');
+  }
+
+  const allowedPageIds = [IML_PAGE_ID, IMBB_PAGE_ID]
+    .map((id) => (typeof id === 'string' ? id.trim() : ''))
+    .filter((id) => isNumericId(id));
+
+  if (allowedPageIds.length === 0) {
+    throw new Error(
+      'Facebook page IDs are not configured; set FACEBOOK_IML_PAGE_ID and/or FACEBOOK_IMBB_PAGE_ID',
+    );
+  }
+
+  const isFromAllowedPage = allowedPageIds.some(
+    (pageId) => trimmed === pageId || trimmed.startsWith(`${pageId}_`),
+  );
+
+  if (!isFromAllowedPage) {
     throw new Error('Invalid Facebook post ID');
   }
 
