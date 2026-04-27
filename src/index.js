@@ -126,7 +126,9 @@ async function processPost(postId, pageLabel) {
     console.log(`[${pageLabel}] ✓ Successfully forwarded post ${postId}`);
   } catch (err) {
     console.error(
-      `[${pageLabel}] ✗ Failed to forward post ${postId}:`,
+      '[%s] ✗ Failed to forward post %s: %s',
+      pageLabel,
+      postId,
       err.message,
     );
   }
