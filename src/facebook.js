@@ -101,8 +101,20 @@ function normalizePost(raw) {
 
   // If this post is a share of another page's post, record the original URL.
   // This lets the dedup store skip IML sharing an IMBB post we already forwarded.
-  if (attachment.url && attachment.url.includes('facebook.com')) {
-    post.sourceUrl = attachment.url;
+  if (attachment.url) {
+    try {
+      const parsedUrl = new URL(attachment.url);
+      const protocol = parsedUrl.protocol.toLowerCase();
+      const host = parsedUrl.hostname.toLowerCase();
+      if (
+        (protocol === 'http:' || protocol === 'https:') &&
+        (host === 'facebook.com' || host.endsWith('.facebook.com'))
+      ) {
+        post.sourceUrl = attachment.url;
+      }
+    } catch (_) {
+      // Ignore malformed URLs.
+    }
   }
 
   // For shares, the original post's text lives in attachment.description.
