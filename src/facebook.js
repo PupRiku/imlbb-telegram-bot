@@ -66,8 +66,8 @@ async function fetchPost(postId) {
   ].join(',');
 
   const { data } = await axios
-    .get(`${BASE}/${safePostId}`, {
-      params: { fields, access_token: TOKEN },
+    .get(`${BASE}/`, {
+      params: { id: safePostId, fields, access_token: TOKEN },
     })
     .catch((err) => {
       console.error(
