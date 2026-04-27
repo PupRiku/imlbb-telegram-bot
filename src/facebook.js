@@ -103,8 +103,13 @@ function normalizePost(raw) {
   // This lets the dedup store skip IML sharing an IMBB post we already forwarded.
   if (attachment.url) {
     try {
-      const host = new URL(attachment.url).hostname.toLowerCase();
-      if (host === 'facebook.com' || host.endsWith('.facebook.com')) {
+      const parsedUrl = new URL(attachment.url);
+      const protocol = parsedUrl.protocol.toLowerCase();
+      const host = parsedUrl.hostname.toLowerCase();
+      if (
+        (protocol === 'http:' || protocol === 'https:') &&
+        (host === 'facebook.com' || host.endsWith('.facebook.com'))
+      ) {
         post.sourceUrl = attachment.url;
       }
     } catch (_) {
