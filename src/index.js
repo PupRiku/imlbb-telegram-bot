@@ -45,8 +45,13 @@ app.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+    if (typeof challenge !== 'string' || !/^\d{1,200}$/.test(challenge)) {
+      console.warn('[Webhook] Verification failed — invalid challenge format');
+      return res.sendStatus(400);
+    }
+
     console.log('[Webhook] Facebook verification successful');
-    return res.status(200).send(challenge);
+    return res.status(200).type('text/plain').send(challenge);
   }
   console.warn('[Webhook] Verification failed — token mismatch');
   return res.sendStatus(403);
