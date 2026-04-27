@@ -45,7 +45,10 @@ app.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    if (typeof challenge !== 'string' || !/^\d{1,200}$/.test(challenge)) {
+    if (
+      typeof challenge !== 'string' ||
+      !/^[A-Za-z0-9._~+=/-]{1,200}$/.test(challenge)
+    ) {
       console.warn('[Webhook] Verification failed — invalid challenge format');
       return res.sendStatus(400);
     }
