@@ -33,7 +33,9 @@ function assertValidPostId(postId) {
     .filter((id) => isNumericId(id));
 
   if (allowedPageIds.length === 0) {
-    throw new Error('Facebook page IDs are not configured');
+    throw new Error(
+      'Facebook page IDs are not configured; set FACEBOOK_IML_PAGE_ID and/or FACEBOOK_IMBB_PAGE_ID',
+    );
   }
 
   const isFromAllowedPage = allowedPageIds.some(
