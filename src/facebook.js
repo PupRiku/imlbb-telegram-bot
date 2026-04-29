@@ -61,7 +61,7 @@ async function fetchPost(postId) {
     'message',
     'story',
     'full_picture',
-    'attachments{media_type,type,media,subattachments,url,title,description}',
+    'attachments{media_type,type,media{source,image},subattachments{media_type,type,media{source,image}},url,title,description}',
     'created_time',
   ].join(',');
 
