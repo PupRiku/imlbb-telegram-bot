@@ -90,7 +90,25 @@ app.get('/webhook', (req, res) => {
 });
 
 // ── Incoming Facebook events ──────────────────────────────────────────────────
+
+function verifyWebhookSignature(req) {
+  const signature = req.headers['x-hub-signature-256'];
+  if (!signature) return false;
+  const expected =
+    'sha256=' +
+    crypto.createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex');
+  const sigBuf = Buffer.from(signature);
+  const expBuf = Buffer.from(expected);
+  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expBuf);
+}
+
 app.post('/webhook', async (req, res) => {
+  if (!verifyWebhookSignature(req)) {
+    console.warn('[Webhook] Rejected — invalid or missing signature');
+    return res.sendStatus(403);
+  }
+
   // Always respond 200 quickly so Facebook doesn't retry
   res.sendStatus(200);
 
