@@ -1,45 +1,90 @@
-# CLAUDE.md
+# CLAUDE.md — FB → Telegram Bot
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## Project Overview
 
-## Commands
-
-```bash
-npm start        # Run the server (production)
-npm run dev      # Run with nodemon (auto-restart on file changes)
-```
-
-There are no tests or linting scripts defined.
-
-## Environment
-
-Copy `.env.example` to `.env` and fill in all six variables before running. The server will start but silently fail to post if tokens are missing.
-
-`posted.json` is auto-created at the project root on first successful post. It is gitignored and persists deduplication state across restarts.
+This is a Node.js bot that mirrors posts from two Facebook Pages (IML and IMBB) to a single Telegram channel in real-time. It uses Facebook Webhooks to receive events, fetches full post data via the Graph API, and forwards content to Telegram via the grammy library.
 
 ## Architecture
 
-The bot is a single Express webhook server with three source files:
-
-**`src/index.js`** — Entry point and orchestrator. Handles Facebook webhook verification (`GET /webhook`) and incoming post events (`POST /webhook`). On a new post event, it calls `fetchPost` → `checkDuplicate` → `sendPost` → `markPosted`. IML posts are processed immediately; IMBB posts are delayed 8 seconds (`IMBB_DELAY_MS`) so IML wins the deduplication race when both pages fire simultaneously. Always responds `200` to Facebook immediately before async processing to prevent retries.
-
-**`src/facebook.js`** — Fetches a full post from the Facebook Graph API v19.0 and normalizes it into a consistent internal shape: `{ id, text, type, photos, video, link, sourceUrl }`. The `type` field drives which Telegram sender is used. For shared posts, `sourceUrl` captures the original post URL for dedup layer 2.
-
-**`src/telegram.js`** — Sends normalized post objects to the Telegram channel using grammY. Dispatches to a type-specific sender (`sendText`, `sendPhoto`, `sendAlbum`, `sendVideo`, `sendLink`). All senders handle Telegram's 1024-char caption limit by sending media with no caption and following up with a separate text message when overflow occurs. Videos over 50 MB fall back to thumbnail + link. Albums over 10 photos are split into two `sendMediaGroup` calls.
-
-**`src/store.js`** — In-memory deduplication store backed by `posted.json`. Three layers: (1) exact post ID, (2) source URL of shared posts, (3) SHA-1 content hash (text + first image URL) within a 15-minute window. Each collection is capped at 500 entries (FIFO eviction). Loaded from disk at startup, written to disk after every `markPosted` call.
-
-## Deduplication Flow
-
 ```
-postId seen?        → skip (layer 1)
-sourceUrl seen?     → skip (layer 2)
-content hash recent? → skip (layer 3, 15-min window)
-                    → forward, then markPosted
+Facebook Webhook (POST /webhook)
+        │
+        ▼
+   src/index.js        — Express server, webhook handler, page routing
+        │
+        ├─ src/facebook.js   — Graph API fetching & post normalization
+        ├─ src/telegram.js   — Telegram sending logic (all content types)
+        └─ src/store.js      — Three-layer deduplication, persisted to posted.json
 ```
 
-IML is the canonical source. If IMBB fires for the same content within 15 minutes of IML, the content hash check drops it.
+## Key Behaviours
 
-## Deployment
+### Two-Page Deduplication
 
-Hosted on Railway. The `PORT` env var is set by Railway automatically; the default fallback is `3000`. The `/health` endpoint is used by Railway for health checks.
+- **IML** is the preferred source of truth — processed immediately
+- **IMBB** posts are delayed 8 seconds to let IML win dedup races on simultaneous posts
+- Three dedup layers: post ID, content hash (SHA-1 of text + first image), source URL
+
+### Content Type Handling
+
+| Facebook Type    | Telegram Output                                                    |
+| ---------------- | ------------------------------------------------------------------ |
+| `status`         | Text message                                                       |
+| `photo`          | Photo with caption (or no caption + follow-up text if >1024 chars) |
+| `album`          | Media group, caption on first image                                |
+| `video`          | Video upload if ≤50MB, else thumbnail + fallback text              |
+| `link` / `share` | Photo preview + text + URL                                         |
+
+### Text Overflow
+
+- Telegram caption limit: 1024 chars
+- Telegram message limit: 4096 chars
+- If text exceeds caption limit: media sent with NO caption, full text sent as follow-up message
+
+### Known Issues / In Progress
+
+- **Shared videos from IMBB** — when IML shares an IMBB video, attachment `media_type` may not come back as `"video"`, causing fallback to thumbnail. Debug logging is in place in `facebook.js` — awaiting a real shared video post to capture the raw attachment payload and fix type detection.
+
+## Environment Variables
+
+| Variable                        | Description                             |
+| ------------------------------- | --------------------------------------- |
+| `TELEGRAM_BOT_TOKEN`            | From @BotFather                         |
+| `TELEGRAM_CHANNEL_ID`           | `@username` or numeric ID               |
+| `FACEBOOK_PAGE_ACCESS_TOKEN`    | Long-lived token, expires every 60 days |
+| `FACEBOOK_IML_PAGE_ID`          | IML Facebook Page ID                    |
+| `FACEBOOK_IMBB_PAGE_ID`         | IMBB Facebook Page ID                   |
+| `FACEBOOK_WEBHOOK_VERIFY_TOKEN` | Secret string for webhook verification  |
+| `PORT`                          | Server port (default 3000)              |
+
+## Dependencies
+
+| Package     | Purpose                             |
+| ----------- | ----------------------------------- |
+| `express`   | HTTP server for webhook endpoint    |
+| `grammy`    | Telegram Bot API client             |
+| `axios`     | HTTP requests to Facebook Graph API |
+| `dotenv`    | Environment variable loading        |
+| `form-data` | Multipart form support              |
+
+## Facebook API Notes
+
+- Graph API version: `v19.0`
+- Required permissions: `pages_read_engagement`, `pages_read_user_content`, `pages_manage_metadata`
+- Page Access Token must be long-lived (exchange via oauth endpoint, valid 60 days)
+- Both pages must be subscribed via POST `/me/subscribed_apps` with `subscribed_fields=feed`
+- Webhook must be registered in Facebook Developer dashboard under Webhooks → Page → feed
+
+## Hosting
+
+- Deployed on Railway (always-on, auto-deploys from GitHub main branch)
+- Public URL required for Facebook webhook delivery
+- `posted.json` is written to the project root for dedup persistence — ensure Railway doesn't wipe it on redeploy (it shouldn't by default)
+
+## Development Notes
+
+- Run locally with `npm start` (requires `.env` file)
+- Use `npm run dev` for nodemon auto-reload
+- Facebook webhooks require a public HTTPS URL — use ngrok for local testing
+- Test webhook delivery via Facebook Developer dashboard → Webhooks → Test button
+- The `[DEBUG]` log in `facebook.js` `normalizePost()` is temporary and should be removed once the shared video issue is resolved
