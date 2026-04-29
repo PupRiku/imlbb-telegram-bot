@@ -18,15 +18,44 @@
 
 require('dotenv').config();
 
+// Validate all required env vars before any module initializes.
+// telegram.js and facebook.js read env vars at require-time, so missing values
+// would produce cryptic runtime errors rather than a clear startup failure.
+const REQUIRED_VARS = [
+  'TELEGRAM_BOT_TOKEN',
+  'TELEGRAM_CHANNEL_ID',
+  'FACEBOOK_PAGE_ACCESS_TOKEN',
+  'FACEBOOK_IML_PAGE_ID',
+  'FACEBOOK_IMBB_PAGE_ID',
+  'FACEBOOK_WEBHOOK_VERIFY_TOKEN',
+  'FACEBOOK_APP_SECRET',
+];
+const missing = REQUIRED_VARS.filter((v) => !process.env[v]);
+if (missing.length > 0) {
+  console.error('[Startup] Missing required environment variables:');
+  for (const v of missing) console.error(`  - ${v}`);
+  process.exit(1);
+}
+
+const crypto = require('crypto');
 const express = require('express');
 const { fetchPost } = require('./facebook');
 const { sendPost } = require('./telegram');
 const { checkDuplicate, markPosted } = require('./store');
 
 const app = express();
-app.use(express.json());
+// Capture raw body buffer on each request so the webhook handler can verify
+// the X-Hub-Signature-256 header that Facebook sends with every delivery.
+app.use(
+  express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    },
+  }),
+);
 
 const VERIFY_TOKEN = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN;
+const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
 const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
 const PORT = process.env.PORT || 3000;
