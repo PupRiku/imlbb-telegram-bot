@@ -128,6 +128,14 @@ function normalizePost(raw) {
 
   const mediaType = attachment.media_type || attachment.type;
 
+  // TEMP DEBUG
+  console.log('[Facebook] mediaType:', mediaType);
+  console.log(
+    '[Facebook] attachment keys:',
+    JSON.stringify(Object.keys(attachment)),
+  );
+  console.log('[Facebook] attachment:', JSON.stringify(attachment, null, 2));
+
   if (mediaType === 'album' || attachment.subattachments?.data?.length > 1) {
     // ── Album: multiple photos ────────────────────────────
     post.type = 'album';
