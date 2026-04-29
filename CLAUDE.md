@@ -55,6 +55,7 @@ Facebook Webhook (POST /webhook)
 | `FACEBOOK_IML_PAGE_ID`          | IML Facebook Page ID                    |
 | `FACEBOOK_IMBB_PAGE_ID`         | IMBB Facebook Page ID                   |
 | `FACEBOOK_WEBHOOK_VERIFY_TOKEN` | Secret string for webhook verification  |
+| `FACEBOOK_APP_SECRET`           | App secret for HMAC-SHA256 webhook signature verification |
 | `PORT`                          | Server port (default 3000)              |
 
 ## Dependencies
@@ -65,11 +66,10 @@ Facebook Webhook (POST /webhook)
 | `grammy`    | Telegram Bot API client             |
 | `axios`     | HTTP requests to Facebook Graph API |
 | `dotenv`    | Environment variable loading        |
-| `form-data` | Multipart form support              |
 
 ## Facebook API Notes
 
-- Graph API version: `v19.0`
+- Graph API version: `v21.0`
 - Required permissions: `pages_read_engagement`, `pages_read_user_content`, `pages_manage_metadata`
 - Page Access Token must be long-lived (exchange via oauth endpoint, valid 60 days)
 - Both pages must be subscribed via POST `/me/subscribed_apps` with `subscribed_fields=feed`
