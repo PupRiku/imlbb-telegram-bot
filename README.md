@@ -94,4 +94,4 @@ A core challenge: IML and IMBB sometimes post the same content independently. Th
 
 ## Background
 
-This project was built as part of my role as Social Media Coordinator for International Mr. Leather & International Mr. Bootblack. It's one piece of a larger effort to modernize how the organization communicates with its community across platforms.
+This project was built as part of my role as Social Media Manager for International Mr. Leather & International Mr. Bootblack (IMLBB). It's one piece of a larger effort to modernize how the organization communicates with its community across platforms.
