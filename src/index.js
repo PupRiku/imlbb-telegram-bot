@@ -18,34 +18,39 @@
 
 require('dotenv').config();
 
-// Validate all required env vars before any module initializes.
-// telegram.js and facebook.js read env vars at require-time, so missing values
-// would produce cryptic runtime errors rather than a clear startup failure.
-const REQUIRED_VARS = [
+const crypto = require('crypto');
+
+// ── Startup validation ────────────────────────────────────────────────────────
+const REQUIRED_ENV_VARS = [
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_CHANNEL_ID',
-  'FACEBOOK_PAGE_ACCESS_TOKEN',
+  'FACEBOOK_IML_PAGE_ACCESS_TOKEN',
+  'FACEBOOK_IMBB_PAGE_ACCESS_TOKEN',
   'FACEBOOK_IML_PAGE_ID',
   'FACEBOOK_IMBB_PAGE_ID',
   'FACEBOOK_WEBHOOK_VERIFY_TOKEN',
   'FACEBOOK_APP_SECRET',
+  'FACEBOOK_APP_ID',
 ];
-const missing = REQUIRED_VARS.filter((v) => !process.env[v]);
+
+const missing = REQUIRED_ENV_VARS.filter((v) => !process.env[v]);
 if (missing.length > 0) {
   console.error('[Startup] Missing required environment variables:');
-  for (const v of missing) console.error(`  - ${v}`);
+  missing.forEach((v) => console.error(`  - ${v}`));
   process.exit(1);
 }
 
-const crypto = require('crypto');
 const express = require('express');
 const { fetchPost } = require('./facebook');
 const { sendPost } = require('./telegram');
 const { checkDuplicate, markPosted } = require('./store');
+const { startScheduler } = require('./tokenManager');
 
 const app = express();
-// Capture raw body buffer on each request so the webhook handler can verify
-// the X-Hub-Signature-256 header that Facebook sends with every delivery.
+
+// ── HMAC signature verification ───────────────────────────────────────────────
+const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -54,14 +59,28 @@ app.use(
   }),
 );
 
+function verifyWebhookSignature(req) {
+  const signature = req.headers['x-hub-signature-256'];
+  if (!signature) return false;
+  const expected =
+    'sha256=' +
+    crypto.createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex');
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expected),
+    );
+  } catch {
+    return false;
+  }
+}
+
 const VERIFY_TOKEN = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN;
-const APP_SECRET = process.env.FACEBOOK_APP_SECRET;
 const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
 const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
 const PORT = process.env.PORT || 3000;
 
 // How long to delay processing IMBB posts (ms).
-// Gives IML's webhook time to win the dedup race if both pages post simultaneously.
 const IMBB_DELAY_MS = 8000;
 
 // ── Health check ─────────────────────────────────────────────────────────────
@@ -74,38 +93,18 @@ app.get('/webhook', (req, res) => {
   const challenge = req.query['hub.challenge'];
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    if (
-      typeof challenge !== 'string' ||
-      !/^[A-Za-z0-9._~+=/-]{1,200}$/.test(challenge)
-    ) {
-      console.warn('[Webhook] Verification failed — invalid challenge format');
-      return res.sendStatus(400);
-    }
-
     console.log('[Webhook] Facebook verification successful');
-    return res.status(200).type('text/plain').send(challenge);
+    return res.status(200).send(challenge);
   }
   console.warn('[Webhook] Verification failed — token mismatch');
   return res.sendStatus(403);
 });
 
 // ── Incoming Facebook events ──────────────────────────────────────────────────
-
-function verifyWebhookSignature(req) {
-  const signature = req.headers['x-hub-signature-256'];
-  if (!signature) return false;
-  const expected =
-    'sha256=' +
-    crypto.createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex');
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expected);
-  if (sigBuf.length !== expBuf.length) return false;
-  return crypto.timingSafeEqual(sigBuf, expBuf);
-}
-
 app.post('/webhook', async (req, res) => {
+  // Verify HMAC signature before processing anything
   if (!verifyWebhookSignature(req)) {
-    console.warn('[Webhook] Rejected — invalid or missing signature');
+    console.warn('[Webhook] Rejected request — invalid signature');
     return res.sendStatus(403);
   }
 
@@ -142,10 +141,8 @@ app.post('/webhook', async (req, res) => {
       if (!postId?.startsWith(pageId)) continue;
 
       if (isIML) {
-        // IML: process immediately (preferred source of truth)
         await processPost(postId, 'IML');
       } else if (isIMBB) {
-        // IMBB: delay slightly so IML wins the dedup race on simultaneous posts
         setTimeout(() => processPost(postId, 'IMBB'), IMBB_DELAY_MS);
       }
     }
@@ -173,9 +170,7 @@ async function processPost(postId, pageLabel) {
     console.log(`[${pageLabel}] ✓ Successfully forwarded post ${postId}`);
   } catch (err) {
     console.error(
-      '[%s] ✗ Failed to forward post %s: %s',
-      pageLabel,
-      postId,
+      `[${pageLabel}] ✗ Failed to forward post ${postId}:`,
       err.message,
     );
   }
@@ -191,4 +186,7 @@ app.listen(PORT, () => {
 ║   Port      : ${String(PORT).padEnd(26)}║
 ╚══════════════════════════════════════════╝
   `);
+
+  // Start the token auto-refresh scheduler
+  startScheduler();
 });

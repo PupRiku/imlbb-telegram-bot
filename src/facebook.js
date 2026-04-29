@@ -2,51 +2,31 @@
  * facebook.js
  * Fetches full post data (text, photos, videos, albums, links)
  * from the Facebook Graph API.
+ *
+ * Uses per-page tokens from tokenManager.js so each page always
+ * uses its own dedicated, auto-refreshed access token.
  */
 
 const axios = require('axios');
+const { getIMLToken, getIMBBToken } = require('./tokenManager');
 
 const BASE = 'https://graph.facebook.com/v21.0';
-const TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+
 const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
 const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
 
-function isNumericId(value) {
-  return typeof value === 'string' && /^\d+$/.test(value.trim());
-}
-
-function assertValidPostId(postId) {
-  if (typeof postId !== 'string') {
-    throw new Error('Invalid Facebook post ID');
-  }
-
-  const trimmed = postId.trim();
-  const isNumeric = /^\d+$/.test(trimmed);
-  const isCompositeNumeric = /^\d+_\d+$/.test(trimmed);
-
-  if (!isNumeric && !isCompositeNumeric) {
-    throw new Error('Invalid Facebook post ID');
-  }
-
-  const allowedPageIds = [IML_PAGE_ID, IMBB_PAGE_ID]
-    .map((id) => (typeof id === 'string' ? id.trim() : ''))
-    .filter((id) => isNumericId(id));
-
-  if (allowedPageIds.length === 0) {
-    throw new Error(
-      'Facebook page IDs are not configured; set FACEBOOK_IML_PAGE_ID and/or FACEBOOK_IMBB_PAGE_ID',
-    );
-  }
-
-  const isFromAllowedPage = allowedPageIds.some(
-    (pageId) => trimmed === pageId || trimmed.startsWith(`${pageId}_`),
+/**
+ * Resolve the correct page token for a given post ID.
+ * Post IDs are prefixed with the page ID (e.g. "220555721291160_123456").
+ */
+function getTokenForPost(postId) {
+  if (postId?.startsWith(IML_PAGE_ID)) return getIMLToken();
+  if (postId?.startsWith(IMBB_PAGE_ID)) return getIMBBToken();
+  // Fallback to IML token if we can't determine the page
+  console.warn(
+    `[Facebook] Could not determine page for post ${postId}, using IML token`,
   );
-
-  if (!isFromAllowedPage) {
-    throw new Error('Invalid Facebook post ID');
-  }
-
-  return trimmed;
+  return getIMLToken();
 }
 
 /**
@@ -55,7 +35,6 @@ function assertValidPostId(postId) {
  * @returns {Promise<object>} Normalized post object
  */
 async function fetchPost(postId) {
-  const safePostId = assertValidPostId(postId);
   const fields = [
     'id',
     'message',
@@ -65,9 +44,11 @@ async function fetchPost(postId) {
     'created_time',
   ].join(',');
 
+  const token = getTokenForPost(postId);
+
   const { data } = await axios
-    .get(`${BASE}/`, {
-      params: { id: safePostId, fields, access_token: TOKEN },
+    .get(`${BASE}/${postId}`, {
+      params: { fields, access_token: token },
     })
     .catch((err) => {
       console.error(
@@ -100,25 +81,12 @@ function normalizePost(raw) {
   if (!attachment) return post;
 
   // If this post is a share of another page's post, record the original URL.
-  // This lets the dedup store skip IML sharing an IMBB post we already forwarded.
-  if (attachment.url) {
-    try {
-      const parsedUrl = new URL(attachment.url);
-      const protocol = parsedUrl.protocol.toLowerCase();
-      const host = parsedUrl.hostname.toLowerCase();
-      if (
-        (protocol === 'http:' || protocol === 'https:') &&
-        (host === 'facebook.com' || host.endsWith('.facebook.com'))
-      ) {
-        post.sourceUrl = attachment.url;
-      }
-    } catch (_) {
-      // Ignore malformed URLs.
-    }
+  if (attachment.url && attachment.url.includes('facebook.com')) {
+    post.sourceUrl = attachment.url;
   }
 
   // For shares, the original post's text lives in attachment.description.
-  // Combine IML's share caption (post.text) with the original text, avoiding duplication.
+  // Combine share caption with original text, avoiding duplication.
   const attachmentDescription = attachment.description || '';
   if (attachmentDescription && attachmentDescription !== post.text) {
     post.text = post.text
@@ -128,7 +96,7 @@ function normalizePost(raw) {
 
   const mediaType = attachment.media_type || attachment.type;
 
-  // TEMP DEBUG
+  // DEBUG — remove once shared video issue is resolved
   console.log('[Facebook] mediaType:', mediaType);
   console.log(
     '[Facebook] attachment keys:',
@@ -144,8 +112,13 @@ function normalizePost(raw) {
         url: sub.media?.image?.src || sub.media?.source,
       }))
       .filter((p) => p.url);
-  } else if (mediaType === 'video' || mediaType === 'live_video') {
-    // ── Video ─────────────────────────────────────────────
+  } else if (
+    mediaType === 'video' ||
+    mediaType === 'live_video' ||
+    attachment.media?.source
+  ) {
+    // ── Video — also catches shared videos where media_type is "share"
+    //    but attachment.media.source (the video URL) is present
     post.type = 'video';
     post.video = {
       url: attachment.media?.source || null,
@@ -163,7 +136,6 @@ function normalizePost(raw) {
       title: attachment.title || '',
       description: attachment.description || '',
     };
-    // Links sometimes also have a preview image
     if (raw.full_picture) {
       post.photos = [{ url: raw.full_picture }];
     }
