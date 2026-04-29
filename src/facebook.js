@@ -6,7 +6,7 @@
 
 const axios = require('axios');
 
-const BASE = 'https://graph.facebook.com/v19.0';
+const BASE = 'https://graph.facebook.com/v21.0';
 const TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
 const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
 const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
