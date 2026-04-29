@@ -137,11 +137,13 @@ async function sendVideo(post) {
     } catch (_) {}
   }
 
-  // Fallback: thumbnail + link
+  // Fallback: thumbnail + link.
+  // post.text is raw and must be escaped before combining with the HTML link tag,
+  // so we assemble the final HTML string here rather than escaping the whole thing.
   const fallbackText =
-    (post.text ? post.text + '\n\n' : '') +
+    (post.text ? escapeHTML(post.text) + '\n\n' : '') +
     (post.video?.url
-      ? `🎬 <a href="${post.video.url}">Watch the full video on Facebook</a>`
+      ? `🎬 <a href="${escapeHTML(post.video.url)}">Watch the full video on Facebook</a>`
       : '🎬 Video available on our Facebook page.');
 
   const needsFallbackOverflow = fallbackText.length > CAPTION_LIMIT;
@@ -150,12 +152,12 @@ async function sendVideo(post) {
     await bot.api.sendPhoto(CHANNEL, post.video.thumbnail, {
       ...(needsFallbackOverflow
         ? {}
-        : { caption: escapeHTML(fallbackText), parse_mode: 'HTML' }),
+        : { caption: fallbackText, parse_mode: 'HTML' }),
     });
     if (needsFallbackOverflow) {
       await bot.api.sendMessage(
         CHANNEL,
-        escapeHTML(truncate(fallbackText, TEXT_LIMIT)),
+        truncate(fallbackText, TEXT_LIMIT),
         {
           parse_mode: 'HTML',
           disable_web_page_preview: true,
@@ -165,7 +167,7 @@ async function sendVideo(post) {
   } else {
     await bot.api.sendMessage(
       CHANNEL,
-      escapeHTML(truncate(fallbackText, TEXT_LIMIT)),
+      truncate(fallbackText, TEXT_LIMIT),
       {
         parse_mode: 'HTML',
       },
@@ -180,7 +182,7 @@ async function sendLink(post) {
     const parts = [];
     if (post.link.title) parts.push(`<b>${escapeHTML(post.link.title)}</b>`);
     if (post.link.description) parts.push(escapeHTML(post.link.description));
-    if (post.link.url) parts.push(`🔗 ${post.link.url}`);
+    if (post.link.url) parts.push(`🔗 ${escapeHTML(post.link.url)}`);
     if (text) parts.unshift(escapeHTML(text));
     text = parts.join('\n\n');
   }
@@ -212,7 +214,11 @@ function truncate(str, max) {
 
 function escapeHTML(str) {
   if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 module.exports = { sendPost };
