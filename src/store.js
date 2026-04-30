@@ -69,11 +69,10 @@ function save() {
  */
 function buildContentHash(post) {
   const text = (post.text || "").trim();
-  const firstImage = post.photos?.[0]?.url || post.video?.thumbnail || "";
-  if (!text && !firstImage) return null;
+  if (!text) return null;
   return crypto
     .createHash("sha1")
-    .update(text + "|" + firstImage)
+    .update(text)
     .digest("hex");
 }
 
