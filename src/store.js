@@ -12,35 +12,35 @@
  * All data is persisted to posted.json so dedup survives restarts.
  */
 
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
-const STORE_FILE = path.join(__dirname, "..", "posted.json");
+const STORE_FILE = path.join(__dirname, '..', 'posted.json');
 
 // How long (ms) to consider a content hash "recent" for cross-page dedup.
 // 15 minutes is plenty of time for IMBB to mirror an IML post.
 const HASH_WINDOW_MS = 15 * 60 * 1000;
 
-let seenIds = new Set();           // post IDs already forwarded
-let seenHashes = new Map();        // contentHash → timestamp (ms)
-let seenSourceUrls = new Set();    // original post URLs already forwarded
+let seenIds = new Set(); // post IDs already forwarded
+let seenHashes = new Map(); // contentHash → timestamp (ms)
+let seenSourceUrls = new Set(); // original post URLs already forwarded
 
 // ── Persistence ───────────────────────────────────────────────────────────────
 
 function load() {
   try {
     if (fs.existsSync(STORE_FILE)) {
-      const data = JSON.parse(fs.readFileSync(STORE_FILE, "utf8"));
+      const data = JSON.parse(fs.readFileSync(STORE_FILE, 'utf8'));
       seenIds = new Set(data.ids || []);
       seenHashes = new Map(data.hashes || []);
       seenSourceUrls = new Set(data.sourceUrls || []);
       console.log(
-        `[Store] Loaded ${seenIds.size} IDs, ${seenHashes.size} hashes, ${seenSourceUrls.size} source URLs`
+        `[Store] Loaded ${seenIds.size} IDs, ${seenHashes.size} hashes, ${seenSourceUrls.size} source URLs`,
       );
     }
   } catch (err) {
-    console.warn("[Store] Could not load posted.json:", err.message);
+    console.warn('[Store] Could not load posted.json:', err.message);
   }
 }
 
@@ -53,10 +53,10 @@ function save() {
         hashes: [...seenHashes],
         sourceUrls: [...seenSourceUrls],
       }),
-      "utf8"
+      'utf8',
     );
   } catch (err) {
-    console.warn("[Store] Could not save posted.json:", err.message);
+    console.warn('[Store] Could not save posted.json:', err.message);
   }
 }
 
@@ -68,12 +68,9 @@ function save() {
  * @param {object} post – normalized post from facebook.js
  */
 function buildContentHash(post) {
-  const text = (post.text || "").trim();
+  const text = (post.text || '').trim();
   if (!text) return null;
-  return crypto
-    .createHash("sha1")
-    .update(text)
-    .digest("hex");
+  return crypto.createHash('sha1').update(text).digest('hex');
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -85,12 +82,15 @@ function buildContentHash(post) {
 function checkDuplicate(postId, post) {
   // 1. Exact post ID
   if (seenIds.has(postId)) {
-    return { isDuplicate: true, reason: "post ID already forwarded" };
+    return { isDuplicate: true, reason: 'post ID already forwarded' };
   }
 
   // 2. Source URL (IML sharing an IMBB post we already sent)
   if (post.sourceUrl && seenSourceUrls.has(post.sourceUrl)) {
-    return { isDuplicate: true, reason: `source URL already forwarded: ${post.sourceUrl}` };
+    return {
+      isDuplicate: true,
+      reason: `source URL already forwarded: ${post.sourceUrl}`,
+    };
   }
 
   // 3. Content hash within time window (cross-page copy)
@@ -98,7 +98,10 @@ function checkDuplicate(postId, post) {
   if (hash) {
     const seenAt = seenHashes.get(hash);
     if (seenAt && Date.now() - seenAt < HASH_WINDOW_MS) {
-      return { isDuplicate: true, reason: "duplicate content within 15-minute window" };
+      return {
+        isDuplicate: true,
+        reason: 'duplicate content within 15-minute window',
+      };
     }
   }
 
@@ -118,7 +121,8 @@ function markPosted(postId, post) {
   // 2. Store source URL if this was a share
   if (post.sourceUrl) {
     seenSourceUrls.add(post.sourceUrl);
-    if (seenSourceUrls.size > 500) seenSourceUrls.delete([...seenSourceUrls][0]);
+    if (seenSourceUrls.size > 500)
+      seenSourceUrls.delete([...seenSourceUrls][0]);
   }
 
   // 3. Store content hash with timestamp
