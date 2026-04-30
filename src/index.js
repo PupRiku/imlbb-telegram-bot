@@ -10,10 +10,10 @@
  *   2. Source URL (catches IML sharing an IMBB post already forwarded)
  *   3. Content hash within 15-minute window (catches IMBB copying an IML post verbatim)
  *
- * IML is treated as the preferred source — if both pages fire within the
- * dedup window, IML's version is kept and IMBB's is silently dropped.
- * To achieve this, IML posts are processed immediately while IMBB posts
- * wait a short delay, giving IML's webhook time to register first.
+ * IML is always the preferred source of truth. IMBB posts are held in a
+ * pending queue for 90 seconds. If an IML post with matching content arrives
+ * within that window, IML wins and IMBB is discarded. If no IML match arrives,
+ * IMBB's post is forwarded as an original.
  */
 
 require('dotenv').config();
@@ -43,7 +43,7 @@ if (missing.length > 0) {
 const express = require('express');
 const { fetchPost } = require('./facebook');
 const { sendPost } = require('./telegram');
-const { checkDuplicate, markPosted } = require('./store');
+const { checkDuplicate, markPosted, buildTextHash } = require('./store');
 const { startScheduler } = require('./tokenManager');
 
 const app = express();
@@ -80,8 +80,50 @@ const IML_PAGE_ID = process.env.FACEBOOK_IML_PAGE_ID;
 const IMBB_PAGE_ID = process.env.FACEBOOK_IMBB_PAGE_ID;
 const PORT = process.env.PORT || 3000;
 
-// How long to delay processing IMBB posts (ms).
-const IMBB_DELAY_MS = 8000;
+// How long to hold an IMBB post before forwarding if no IML match arrives (ms)
+const IMBB_HOLD_MS = 90 * 1000;
+
+// ── IMBB pending queue ────────────────────────────────────────────────────────
+// Maps contentHash → { postId, post, timer }
+const imbbPending = new Map();
+
+function holdIMBBPost(postId, post) {
+  const hash = buildTextHash(post);
+
+  // If no hash (no text), nothing to match on — forward immediately
+  if (!hash) {
+    processPost(postId, 'IMBB', post);
+    return;
+  }
+
+  console.log(
+    `[IMBB] Holding post ${postId} for ${IMBB_HOLD_MS / 1000}s — waiting for IML match...`,
+  );
+
+  const timer = setTimeout(async () => {
+    if (imbbPending.has(hash)) {
+      imbbPending.delete(hash);
+      console.log(
+        `[IMBB] No IML match arrived — forwarding IMBB post ${postId}`,
+      );
+      await processPost(postId, 'IMBB', post);
+    }
+  }, IMBB_HOLD_MS);
+
+  imbbPending.set(hash, { postId, post, timer });
+}
+
+function cancelIMBBIfDuplicate(imlPost) {
+  const hash = buildTextHash(imlPost);
+  if (!hash) return;
+
+  if (imbbPending.has(hash)) {
+    const { postId, timer } = imbbPending.get(hash);
+    clearTimeout(timer);
+    imbbPending.delete(hash);
+    console.log(`[IMBB] IML match found — discarding held IMBB post ${postId}`);
+  }
+}
 
 // ── Health check ─────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -102,13 +144,11 @@ app.get('/webhook', (req, res) => {
 
 // ── Incoming Facebook events ──────────────────────────────────────────────────
 app.post('/webhook', async (req, res) => {
-  // Verify HMAC signature before processing anything
   if (!verifyWebhookSignature(req)) {
     console.warn('[Webhook] Rejected request — invalid signature');
     return res.sendStatus(403);
   }
 
-  // Always respond 200 quickly so Facebook doesn't retry
   res.sendStatus(200);
 
   const body = req.body;
@@ -116,8 +156,6 @@ app.post('/webhook', async (req, res) => {
 
   for (const entry of body.entry || []) {
     const pageId = entry.id;
-
-    // Only handle events from our two known pages
     if (pageId !== IML_PAGE_ID && pageId !== IMBB_PAGE_ID) continue;
 
     const isIML = pageId === IML_PAGE_ID;
@@ -127,37 +165,72 @@ app.post('/webhook', async (req, res) => {
       if (change.field !== 'feed') continue;
 
       const value = change.value;
-
-      // Only new posts — ignore edits, deletes, comments, likes, etc.
       if (value.verb !== 'add') continue;
 
-      // Accept all post item types Facebook may send
       const POST_ITEMS = new Set(['post', 'status', 'photo', 'video', 'share']);
       if (!POST_ITEMS.has(value.item)) continue;
 
-      // The post_id prefix always matches the page that owns it.
-      // This filters out fan/visitor wall posts on either page.
       const postId = value.post_id;
       if (!postId?.startsWith(pageId)) continue;
 
       if (isIML) {
-        await processPost(postId, 'IML');
+        await handleIMLPost(postId);
       } else if (isIMBB) {
-        setTimeout(() => processPost(postId, 'IMBB'), IMBB_DELAY_MS);
+        await handleIMBBPost(postId);
       }
     }
   }
 });
 
-// ── Core processing ───────────────────────────────────────────────────────────
+// ── Page handlers ─────────────────────────────────────────────────────────────
 
-async function processPost(postId, pageLabel) {
-  console.log(`[${pageLabel}] New post detected: ${postId}`);
-
+async function handleIMLPost(postId) {
+  console.log(`[IML] New post detected: ${postId}`);
   try {
     const post = await fetchPost(postId);
-    const { isDuplicate, reason } = checkDuplicate(postId, post);
 
+    // Cancel any matching held IMBB post before forwarding IML's version
+    cancelIMBBIfDuplicate(post);
+
+    const { isDuplicate, reason } = checkDuplicate(postId, post);
+    if (isDuplicate) {
+      console.log(`[IML] Skipping duplicate post ${postId} — ${reason}`);
+      return;
+    }
+
+    await sendPost(post);
+    markPosted(postId, post);
+    console.log(`[IML] ✓ Successfully forwarded post ${postId}`);
+  } catch (err) {
+    console.error(`[IML] ✗ Failed to forward post ${postId}:`, err.message);
+  }
+}
+
+async function handleIMBBPost(postId) {
+  console.log(`[IMBB] New post detected: ${postId}`);
+  try {
+    const post = await fetchPost(postId);
+
+    // Check dedup before holding — no point holding if it's already been posted
+    const { isDuplicate, reason } = checkDuplicate(postId, post);
+    if (isDuplicate) {
+      console.log(`[IMBB] Skipping duplicate post ${postId} — ${reason}`);
+      return;
+    }
+
+    // Hold the post and wait to see if IML posts the same content
+    holdIMBBPost(postId, post);
+  } catch (err) {
+    console.error(`[IMBB] ✗ Failed to fetch post ${postId}:`, err.message);
+  }
+}
+
+// ── Core processing ───────────────────────────────────────────────────────────
+
+async function processPost(postId, pageLabel, post) {
+  try {
+    // Re-check dedup at send time in case state changed during the hold window
+    const { isDuplicate, reason } = checkDuplicate(postId, post);
     if (isDuplicate) {
       console.log(
         `[${pageLabel}] Skipping duplicate post ${postId} — ${reason}`,
@@ -187,6 +260,5 @@ app.listen(PORT, () => {
 ╚══════════════════════════════════════════╝
   `);
 
-  // Start the token auto-refresh scheduler
   startScheduler();
 });
