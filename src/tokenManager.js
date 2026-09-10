@@ -18,7 +18,9 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 
-const STORE_FILE = path.join(__dirname, '..', 'token-store.json');
+const STORE_FILE =
+  process.env.TOKEN_STORE_PATH ||
+  path.join(__dirname, '..', 'token-store.json');
 const BASE = 'https://graph.facebook.com/v21.0';
 
 const APP_ID = process.env.FACEBOOK_APP_ID;
