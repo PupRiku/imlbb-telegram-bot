@@ -5,53 +5,14 @@ Items are roughly ordered by priority.
 
 ---
 
-## 🔴 High Priority
-
-### 1. Railway filesystem is ephemeral — token persistence will fail after redeploy
-
-**Status:** Open  
-**Area:** `src/tokenManager.js`
-
-`token-store.json` is written to the local container filesystem, which Railway wipes on every redeploy and restart. This means:
-
-- First startup: loads from env vars, refreshes after 1 min, writes to file ✓
-- 7 days later: scheduler refreshes, writes new token to file ✓
-- Code push triggers redeploy: file is gone, env still has the original (now stale) token ✗
-
-Over time, after enough refresh cycles without a persistent file, the env var token will be too stale to exchange and auto-refresh will start failing silently.
-
-**Fix:**
-
-1. Attach a Railway Volume to the service:
-   - Railway dashboard → service → **Volumes** → create volume → mount path e.g. `/app/data`
-2. Add a `TOKEN_STORE_PATH` env var (default: current path for local dev):
-   ```
-   TOKEN_STORE_PATH=/app/data/token-store.json
-   ```
-3. Update `STORE_FILE` in `tokenManager.js`:
-   ```js
-   const STORE_FILE =
-     process.env.TOKEN_STORE_PATH ||
-     path.join(__dirname, '..', 'token-store.json');
-   ```
-4. Verify by deploying and confirming `token-store.json` survives a forced redeploy
-
-**Also add to `.env.example`:**
-
-```
-TOKEN_STORE_PATH=/app/data/token-store.json
-```
-
----
-
 ## 🟡 Medium Priority
 
-### 2. Initial token refresh on every startup wastes Facebook refresh cycles
+### 1. Smart startup refresh — skip if tokens are fresh
 
 **Status:** Open  
 **Area:** `src/tokenManager.js`
 
-The scheduler currently calls `refreshAllTokens()` 60 seconds after every startup. This is fine for validating tokens on first boot, but burns a fresh 60-day Facebook refresh cycle on every Railway restart (deploys, OOM kills, code pushes).
+The scheduler currently calls `refreshAllTokens()` 60 seconds after every startup. Now that the Railway Volume persists `lastRefreshed`, this burns an unnecessary Facebook refresh cycle on every redeploy.
 
 **Fix:** Before refreshing on startup, check if the token actually needs it:
 
@@ -79,13 +40,11 @@ setTimeout(async () => {
 }, 60 * 1000);
 ```
 
-**Note:** This is only useful once item #1 (Railway Volume) is implemented — without persistent storage, `lastRefreshed` is always null on startup anyway.
-
 ---
 
 ## 🟢 Low Priority / Pending Data
 
-### 3. Shared IMBB video posts show thumbnail instead of video
+### 2. Shared IMBB video posts show thumbnail instead of video
 
 **Status:** Waiting on debug logs  
 **Area:** `src/facebook.js`
@@ -105,19 +64,36 @@ The `attachment.media?.source` check should catch shared videos where `media_typ
 
 **Also:** Once this is confirmed and fixed, remove all `[DEBUG]` and `[Facebook] mediaType/attachment` console.log statements from `normalizePost()`.
 
+### 3. Live video / Reel handling
+
+**Status:** Open  
+**Area:** `src/telegram.js`, `src/facebook.js`
+
+Facebook Reels and live videos use DASH adaptive streaming URLs (`tag=dash`, `bitrate=0`) which Telegram cannot upload as proper video — they come through as silent GIFs instead.
+
+**Planned behavior:**
+
+- **Reels** — detect DASH URL, send thumbnail + post text + link to reel URL
+- **Live videos** — send IML profile picture + "🔴 We are live! Watch here: [link]"
+  **Blocked on:** IML profile picture URL (get via `/me?fields=picture.width(720)` in Graph API Explorer with IML page token)
+
 ---
 
 ## ✅ Completed
 
+- Railway Volume for persistent token storage (`/app/data/token-store.json`)
+- True Page Tokens via `/me/accounts` (not User Tokens)
+- Per-page dedicated access tokens (IML + IMBB separate)
+- Auto-refresh token scheduler (weekly, 7-day interval)
+- IMBB pending queue — IML always wins regardless of post timing
+- Content hash dedup uses text only (CDN URLs differ across pages)
 - Three-layer deduplication (post ID, content hash, source URL)
 - Two-page support (IML + IMBB) with IML as preferred source
-- Per-page dedicated access tokens
-- Auto-refresh token scheduler (weekly)
 - HMAC webhook signature verification
 - Startup env var validation
-- Text overflow handling (image + follow-up message)
+- Text overflow handling (image with no caption + full text follow-up)
 - All content types: text, photo, album, video, link/share
 - Shared post text extraction from `attachment.description`
+- grammy replacing node-telegram-bot-api (no vulnerabilities)
 - Deployed to Railway with GitHub auto-deploy
 - Privacy policy hosted on GitHub Pages
-- grammy replacing node-telegram-bot-api (no vulnerabilities)
