@@ -173,8 +173,13 @@ app.post('/webhook', async (req, res) => {
       const postId = value.post_id;
       if (!postId?.startsWith(pageId)) continue;
 
-      // TEMP DEBUG
-      console.log('[Webhook] Raw value:', JSON.stringify(value, null, 2));
+      // Skip unpublished/scheduled posts — Facebook fires webhooks at schedule time,
+      // not publish time, when posts are scheduled directly from the Page interface.
+      // A second webhook fires at actual publish time with published: 1.
+      if (value.published === 0) {
+        console.log(`[Webhook] Skipping unpublished/scheduled post ${postId}`);
+        continue;
+      }
 
       if (isIML) {
         await handleIMLPost(postId);
