@@ -177,7 +177,6 @@ app.post('/webhook', async (req, res) => {
       // not publish time, when posts are scheduled directly from the Page interface.
       // A second webhook fires at actual publish time with published: 1.
       if (value.published === 0) {
-        console.log(`[Webhook] Skipping unpublished/scheduled post ${postId}`);
         continue;
       }
 
