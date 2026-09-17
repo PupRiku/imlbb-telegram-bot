@@ -173,6 +173,9 @@ app.post('/webhook', async (req, res) => {
       const postId = value.post_id;
       if (!postId?.startsWith(pageId)) continue;
 
+      // TEMP DEBUG
+      console.log('[Webhook] Raw value:', JSON.stringify(value, null, 2));
+
       if (isIML) {
         await handleIMLPost(postId);
       } else if (isIMBB) {
